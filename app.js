@@ -1231,8 +1231,7 @@ function openScore(entry, nav = "push") {
   $("panel").hidden = $("panel-backdrop").hidden = true;
   setPanel(!partChosen || !entry.images?.length);
   renderFollow();
-  // Diteggiature associate allo spartito digitale (non alla fotografia).
-  current.fingerings ??= {};
+  // Pages (photos) when there are any to follow along on; otherwise the read score.
   $("view-toggle").hidden = $("follow").hidden;
   setView($("follow").hidden ? "read" : "pages");
 }
@@ -2068,67 +2067,6 @@ function revealCurrentBar() {
   if (el && el.style.display !== "none" && !el.hidden) el.scrollIntoView({ block: "center" });
 }
 
-// Fingerings are anchored to individual digital noteheads in OSMD's SVG.
-// They are stored by page + notehead index, and survive reopening the score.
-let fingerMode = false;
-const fingeringBar = document.getElementById("fingering-bar");
-const fingeringChoice = document.getElementById("fingering-choice");
-let activeFinger = "1";
-document.getElementById("fingering-toggle").onclick = () => {
-  fingerMode = !fingerMode;
-  fingeringBar.hidden = !fingerMode;
-  document.getElementById("fingering-toggle").classList.toggle("primary", fingerMode);
-};
-fingeringChoice.onchange = () => { activeFinger = fingeringChoice.value; };
-function noteheads(div) {
-  // VexFlow/OSMD uses SVG paths within vf-notehead groups.
-  const candidates = [...div.querySelectorAll("svg .vf-notehead")];
-  return candidates.filter(n => { try { return n.getBBox().width > 0; } catch { return false; } });
-}
-function noteCenter(node, div) {
-  const svg = node.ownerSVGElement;
-  if (!svg) return null;
-  const box = node.getBBox(), point = svg.createSVGPoint();
-  point.x = box.x + box.width / 2;
-  point.y = box.y + box.height / 2;
-  const ctm = node.getScreenCTM();
-  if (!ctm) return null;
-  const screen = point.matrixTransform(ctm), rect = div.getBoundingClientRect();
-  return { x: screen.x - rect.left, y: screen.y - rect.top };
-}
-function showFingerings(sheet, div) {
-  div.querySelectorAll(".student-fingering").forEach(el => el.remove());
-  const heads = noteheads(div), marks = current?.fingerings?.[sheet] ?? {};
-  for (const [index, value] of Object.entries(marks)) {
-    if (!heads[Number(index)] || !/^[1-5]$/.test(value)) continue;
-    const xy = noteCenter(heads[Number(index)], div);
-    if (!xy) continue;
-    const label = document.createElement("span");
-    label.className = "student-fingering";
-    label.textContent = value;
-    label.style.left = `${xy.x}px`;
-    label.style.top = `${xy.y - 23}px`;
-    div.append(label);
-  }
-}
-function chooseFingering(e, sheet, div) {
-  const heads = noteheads(div);
-  let closest = -1, distance = Infinity;
-  for (let i = 0; i < heads.length; i++) {
-    const xy = noteCenter(heads[i], div);
-    if (!xy) continue;
-    const r = div.getBoundingClientRect();
-    const d = Math.hypot(e.clientX - r.left - xy.x, e.clientY - r.top - xy.y);
-    if (d < distance) { distance = d; closest = i; }
-  }
-  if (closest < 0 || distance > 28) return;
-  current.fingerings ??= {};
-  current.fingerings[sheet] ??= {};
-  if (activeFinger === "0") delete current.fingerings[sheet][closest];
-  else current.fingerings[sheet][closest] = activeFinger;
-  showFingerings(sheet, div);
-  updateEntry(current.id, { fingerings: current.fingerings });
-}
 // Draws the recognised MusicXML with OSMD, loaded on first use.
 let osmdLoaded;
 let osmdFor = null; // the score currently drawn
@@ -2178,11 +2116,7 @@ async function renderRead() {
       }
       const view = { osmd, div, bar: readMark("read-bar"), playhead: readMark("read-playhead") };
       div.append(view.bar, view.playhead);
-      div.onclick = (e) => {
-        if (fingerMode) { chooseFingering(e, sheet, div); return; }
-        pickReadBar(sheet, e);
-      };
-      showFingerings(sheet, div);
+      div.onclick = (e) => pickReadBar(sheet, e);
       readViews.push(view);
     }
     showBar(currentBeat());

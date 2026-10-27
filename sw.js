@@ -1,7 +1,7 @@
 // App shell: network-first so updates arrive, cache as offline fallback.
 // CDN libraries (Pyodide, onnxruntime-web, OSMD) are versioned: cache-first.
 // models/ is cached by omr-worker.js itself, so it passes straight through.
-const SHELL = "partscanner-shell-fingering-v1";
+const SHELL = "partscanner-shell-v1";
 const CDN = "partscanner-cdn-v1";
 const NETWORK_WAIT = 3000; // ms before a hanging request falls back to the cache
 let slowUntil = 0; // after a fallback, use the cache at once for a while
