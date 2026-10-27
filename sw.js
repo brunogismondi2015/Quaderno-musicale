@@ -1,0 +1,128 @@
+// App shell: network-first so updates arrive, cache as offline fallback.
+// CDN libraries (Pyodide, onnxruntime-web, OSMD) are versioned: cache-first.
+// models/ is cached by omr-worker.js itself, so it passes straight through.
+const SHELL = "partscanner-shell-fingering-v1";
+const CDN = "partscanner-cdn-v1";
+const NETWORK_WAIT = 3000; // ms before a hanging request falls back to the cache
+let slowUntil = 0; // after a fallback, use the cache at once for a while
+
+const SHELL_FILES = [
+  "./",
+  "index.html",
+  "app.js",
+  "score.js",
+  "player.js",
+  "db.js",
+  "orient.js",
+  "pdf-pages.js",
+  "share.js",
+  "audio.js",
+  "styles.css",
+  "omr-worker.js",
+  "omr/onnxruntime.py",
+  "omr/runner.py",
+  "vendor/homr.zip",
+  "manifest.webmanifest",
+  "icon.svg",
+  "icon-192.png",
+  "fonts/plus-jakarta-sans-latin-wght.woff2",
+  "samples/tallis-if-ye-love-me.pdf",
+];
+
+self.addEventListener("install", (e) => {
+  self.skipWaiting();
+  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)));
+});
+self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+
+// GitHub Pages can't send headers, so the worker adds the two that make the
+// app cross-origin isolated, which lets the music reader's WASM use several
+// threads (the decoder is ~60% of a page's time). credentialless keeps the CDN
+// libraries and analytics loading without CORP headers. Applies from the first
+// load the worker controls.
+function isolated(res) {
+  if (!res || res.type === "opaqueredirect" || !res.status) return res;
+  const headers = new Headers(res.headers);
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set("Cross-Origin-Embedder-Policy", "credentialless");
+  const body = [101, 103, 204, 205, 304].includes(res.status) ? null : res.body; // no-body statuses
+  return new Response(body, { status: res.status, statusText: res.statusText, headers });
+}
+
+self.addEventListener("fetch", (e) => {
+  const url = new URL(e.request.url);
+  // Android share sheet -> installed app (manifest share_target): stash the
+  // files for the page to pick up, then open the app.
+  if (e.request.method === "POST" && url.pathname.endsWith("/share-target")) {
+    e.respondWith(
+      (async () => {
+        const form = await e.request.formData();
+        const cache = await caches.open("partscanner-inbox");
+        let i = 0;
+        for (const f of form.getAll("files")) {
+          if (!(f instanceof File)) continue;
+          const headers = { "content-type": f.type, "x-name": encodeURIComponent(f.name) };
+          await cache.put(`inbox/${Date.now()}-${i++}`, new Response(f, { headers }));
+        }
+        // Android can launch the app twice for one share, and the page may
+        // already have looked in the inbox: tell open pages it has changed.
+        for (const c of await self.clients.matchAll({ type: "window" })) c.postMessage({ type: "inbox" });
+        return Response.redirect(new URL("./?inbox", self.registration.scope).href, 303);
+      })(),
+    );
+    return;
+  }
+  if (e.request.method !== "GET") return;
+  if (url.hostname === "cdn.jsdelivr.net") {
+    e.respondWith(
+      caches.open(CDN).then(async (cache) => {
+        const hit = await cache.match(e.request);
+        if (hit) return hit;
+        const res = await fetch(e.request);
+        if (res.ok) cache.put(e.request, res.clone());
+        return res;
+      }),
+    );
+  } else if (url.origin === location.origin && !url.pathname.includes("/models/")) {
+    // no-cache: revalidate with the server so app updates show up on the next
+    // load instead of after the HTTP cache (10 min on GitHub Pages) expires.
+    // Each fresh copy is also kept without its ?v=…, so the plain entry is
+    // always the newest (the copies cached at install are never refreshed).
+    const plain = new URL(url);
+    plain.search = "";
+    const fresh = fetch(e.request.url, { cache: "no-cache" }).then((res) => {
+      slowUntil = 0;
+      if (res.ok) {
+        const copy = res.clone();
+        const latest = res.clone();
+        e.waitUntil(
+          caches.open(SHELL).then((c) => Promise.all([c.put(e.request, copy), url.search && c.put(plain.href, latest)])),
+        );
+      }
+      return res;
+    });
+    // The exact version the page asked for (?v=…) first, so files match;
+    // only when offline any copy (the newest, see above).
+    const exact = () => caches.match(e.request);
+    const cached = async () => (await exact()) || caches.match(plain.href);
+    // On a weak connection the network can hang rather than fail: after a few
+    // seconds use the cached copy (the fetch still refreshes the cache, and the
+    // Update banner offers the new version).
+    // A versioned file (the app's scripts, the music reader) only from its own
+    // version: another cached version once ran an old reader with a new app.
+    const wait = Date.now() < slowUntil ? 0 : NETWORK_WAIT;
+    const slow = new Promise((r) => setTimeout(r, wait)).then(url.search ? exact : cached);
+    e.respondWith(
+      Promise.race([
+        fresh.catch(cached),
+        slow.then((hit) => {
+          if (hit) slowUntil = Date.now() + 30000;
+          return hit || fresh;
+        }),
+      ])
+        .then((res) => res || fresh)
+        .then(isolated),
+    );
+    e.waitUntil(fresh.catch(() => {}));
+  }
+});

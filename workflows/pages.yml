@@ -1,0 +1,46 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch homr source and models
+        run: scripts/fetch-homr.sh
+      - name: Assemble site
+        run: |
+          mkdir -p _site/vendor
+          cp -r index.html privacy.html terms.html *.js styles.css manifest.webmanifest icon.svg icon-192.png icon-512.png favicon.ico og-image.png robots.txt sitemap.xml \
+            omr models fonts _site/
+          cp vendor/homr.zip _site/vendor/
+          mkdir -p _site/samples && cp samples/tallis-if-ye-love-me.pdf _site/samples/
+      - name: Stamp the version onto the app's CSS/JS references
+        run: node scripts/stamp-version.mjs _site "$(git rev-parse --short HEAD)"
+      - name: Check every precached app file is in the site
+        run: |
+          node -e '
+            const fs = require("fs");
+            const files = [...fs.readFileSync("sw.js", "utf8").matchAll(/^\s+"([^"]+)",?$/gm)].map((m) => m[1]);
+            const missing = files.filter((f) => f !== "./" && !fs.existsSync("_site/" + f));
+            if (missing.length) { console.error("Missing from _site:", missing); process.exit(1); }
+            console.log("All", files.length, "precached files present");'
+      - uses: actions/upload-pages-artifact@v3
+      - id: deployment
+        uses: actions/deploy-pages@v4

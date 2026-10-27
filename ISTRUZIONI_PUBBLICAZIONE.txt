@@ -1,0 +1,14 @@
+PARTSONG CON DITEGGIATURE — PACCHETTO DA PUBBLICARE
+
+Questa e una versione sorgente pronta per il flusso di pubblicazione GitHub Pages, NON una app offline gia pronta.
+
+Per ottenere un indirizzo HTTPS apribile dai tablet:
+1. Creare un repository GitHub e caricare tutti i file di questo ZIP nella radice (compresa la cartella .github).
+2. Verificare che il ramo sia main.
+3. In Settings > Pages scegliere Source: GitHub Actions.
+4. In Actions avviare Deploy to GitHub Pages (oppure attendere il push).
+5. Il workflow scarica homr e i modelli e pubblica il sito. Se il download o la compilazione falliscono, il sito non sara utilizzabile.
+6. Aprire il link HTTPS sul tablet e provare con la foto di Jingle Bells. Aprire As read e usare Aggiungi diteggiature.
+
+LIMITI: non collaudato end-to-end su tablet; la lettura dello spartito puo contenere errori; le diteggiature sono ancorate all'ordine delle note SVG e potrebbero spostarsi se cambia la trascrizione; non e disponibile la correzione completa delle note.
+Licenza AGPL-3.0: conservare LICENSE e rispettarne gli obblighi.

@@ -1,0 +1,9 @@
+PROTOTIPO PARTSONG CON DITEGGIATURE SULLO SPARTITO DIGITALE
+
+Il pacchetto sorgente originale non contiene vendor/homr.zip né models/*.onnx. Questi file sono necessari per il riconoscimento e vengono scaricati durante il deploy ufficiale. Non è un pacchetto pronto da aprire offline.
+
+Per il test in una installazione funzionante: scansionare, aprire As read, premere Aggiungi diteggiature, scegliere 1–5 e toccare una testa di nota. Il numero è memorizzato nel database del browser. Selezionare Cancella per rimuoverlo.
+
+Limitazioni: associazione alle teste SVG basata sul loro ordine; dopo un nuovo riconoscimento la posizione potrebbe cambiare. Nessuna modifica alle altezze delle note ancora implementata. Richiede hosting HTTPS e risorse homr/OSMD.
+
+Codice derivato da Partsong, licenza AGPL-3.0; vedere LICENSE.
