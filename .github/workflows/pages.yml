@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Fetch homr source and models
-        run: scripts/fetch-homr.sh
+        run: bash scripts/fetch-homr.sh
       - name: Assemble site
         run: |
           mkdir -p _site/vendor
